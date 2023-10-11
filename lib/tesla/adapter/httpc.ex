@@ -28,28 +28,31 @@ defmodule Tesla.Adapter.Httpc do
   end
 
   # TODO: remove this once OTP 26+ is required
-  if current_otp_version <= 26 do
-    def add_default_ssl_opt(env, opts) do
-      # TODO: verify that requires OTP 25+
-      # TODO: verify that does not require any Elixir version
-      # TODO: maybe use Castore for now? cacertfile: CAStore.file_path(),
-
-      # https://github.com/erlang/otp/blob/33d99c5f50988c4bf124974ce3340bf18dbf0d08/lib/inets/src/http_client/httpc.erl#L461-L476
-      default_ssl_opt = [
-        ssl: [
-          verify: :verify_peer,
-          cacerts: :public_key.cacerts_get(),
-          customize_hostname_check: [
-            match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+  cond do
+    # TODO: remove this once OTP 25+ is required
+    current_otp_version <= 25 ->
+      def add_default_ssl_opt(env, _opts) do
+        default_ssl_opt = [
+          ssl: [
+            verify: :verify_peer,
+            cacert_file: CAStore.file_path(),
+            customize_hostname_check: [
+              match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+            ]
           ]
         ]
-      ]
-      Tesla.Adapter.opts(default_ssl_opt, env, opts)
-    end
-  else
-    def add_default_ssl_opt(env, _opts) do
-      env
-    end
+        Tesla.Adapter.opts(default_ssl_opt, env, opts)
+      end
+      
+    # TODO: remove this once OTP 26+ is required
+    current_otp_version == 25 ->
+      def add_default_ssl_opt(env, _opts) do
+        default_ssl_opts = :httpc.ssl_verify_host_options(true)
+        Tesla.Adapter.opts(default_ssl_opt, env, opts)
+      end
+      
+    current_otp_version >= 26 ->
+      def add_default_ssl_opt(env, _opts), do: env
   end
 
   defp format_response(env, {_, status, _}, headers, body) do
